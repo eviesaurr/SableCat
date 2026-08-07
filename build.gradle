@@ -1,0 +1,98 @@
+plugins {
+    id 'net.neoforged.moddev'
+}
+
+base {
+    archivesName = "sablecat"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+neoForge {
+    version = project.neoforge_version
+    
+    mods {
+        sablecat {
+            sourceSet sourceSets.main
+        }
+    }
+
+    runs {
+        client {
+            client()
+            gameDirectory = project.file('runs/client')
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        server {
+            server()
+            gameDirectory = project.file('runs/server')
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        data {
+            data()
+            gameDirectory = project.file('runs/data')
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').absolutePath, '--existing', file('src/main/resources/').absolutePath
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
+    maven {
+        name = "CurseMaven"
+        url = "https://www.cursemaven.com"
+    }
+    exclusiveContent {
+        forRepository {
+            maven { url = "https://maven.ryanhcode.dev/releases" }
+        }
+        filter {
+            includeGroup("dev.ryanhcode.sable-companion")
+        }
+    }
+}
+
+dependencies {
+    implementation files("libs/sable.jar")
+    compileOnly files("libs/sable-companion.jar")
+    compileOnly files("libs/rapier.jar")
+    compileOnly files("libs/create-1.21.1-6.0.10.jar")
+    compileOnly files("libs/simulated-neoforge-1.21.1-1.3.0.jar")
+    compileOnly files("libs/create-aeronautics-bundled-1.21.1-1.3.0.jar")
+    compileOnly files("libs/scalablelux.jar")
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+        mod_id: project.mod_id,
+        mod_name: project.mod_name,
+        mod_author: project.mod_author,
+        mod_description: project.mod_description,
+        version: project.version,
+        neoforge_version: project.neoforge_version,
+        neoforge_loader_version_range: project.neoforge_loader_version_range,
+        minecraft_version_range: project.minecraft_version_range,
+        license: project.license
+    ]
+    
+    inputs.properties replaceProperties
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand replaceProperties
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('jar', Jar).configure {
+}
