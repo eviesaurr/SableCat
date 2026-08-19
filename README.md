@@ -1,7 +1,7 @@
 # 🐱  SableCat
 ### *The Essential Toolkit for Create: Aeronautics Server Operators*
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/your-repo)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/your-repo)
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green.svg)](https://minecraft.net)
 [![Create: Aeronautics](https://img.shields.io/badge/Create%3A%20Aeronautics-latest-orange.svg)](https://modrinth.com/mod/create-aeronautics)
 ---
