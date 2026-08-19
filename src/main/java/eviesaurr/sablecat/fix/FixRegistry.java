@@ -10,14 +10,6 @@ public final class FixRegistry {
 
     private FixRegistry() {}
 
-    public static FixEntry register(String id, String description, boolean defaultEnabled) {
-        return register(id, description, defaultEnabled, null, FixEntry.Side.BOTH);
-    }
-
-    public static FixEntry register(String id, String description, boolean defaultEnabled, Set<String> requiredMods) {
-        return register(id, description, defaultEnabled, requiredMods, FixEntry.Side.BOTH);
-    }
-
     public static FixEntry register(String id, String description, boolean defaultEnabled, FixEntry.Side side) {
         return register(id, description, defaultEnabled, null, side);
     }
@@ -37,14 +29,6 @@ public final class FixRegistry {
         fixes.put(id, entry);
         SableCat.LOGGER.debug("Registered fix: {} (default: {}, side: {}, requiredMods: {}, hidden: {})", id, defaultEnabled, side, requiredMods, hidden);
         return entry;
-    }
-
-    public static FixEntry registerFix(String id, String description, boolean defaultEnabled) {
-        return register(id, description, defaultEnabled);
-    }
-
-    public static FixEntry registerFix(String id, String description, boolean defaultEnabled, Set<String> requiredMods) {
-        return register(id, description, defaultEnabled, requiredMods);
     }
 
     public static void checkEnvironment(java.util.function.Function<String, Boolean> modChecker) {
@@ -70,21 +54,10 @@ public final class FixRegistry {
         return entry != null && entry.isEnabled();
     }
 
-    public static void setEnabled(String id, boolean enabled) {
-        FixEntry entry = fixes.get(id);
-        if (entry != null) {
-            entry.setEnabled(enabled);
-        }
-    }
-
     public static FixEntry getFix(String id) { return fixes.get(id); }
 
     public static Collection<FixEntry> getAllFixes() {
         return Collections.unmodifiableCollection(fixes.values());
     }
-
-    public static String getDescription(String id) {
-        FixEntry entry = fixes.get(id);
-        return entry != null ? entry.getDescription() : id;
-    }
+    
 }

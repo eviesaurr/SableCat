@@ -18,16 +18,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Persistent manifest of every sub-level the server has ever seen load or save
- * successfully - lightweight metadata only (never block content), accumulated
- * across sessions in sablecat_sublevel_manifest.json in the world folder.
- * <p>
- * Because Sable loads sub-levels lazily per-chunk, no single moment sees them
- * all; a cumulative manifest converges on the full inventory instead. Used by
- * /sablecat manifest to list known sub-levels and diff "known" against
- * "currently loaded or captured-as-failed" to flag silent disappearances.
- */
 public final class SubLevelManifest {
 
     public static final class Entry {
@@ -45,14 +35,12 @@ public final class SubLevelManifest {
     private static volatile long lastFlushMs = 0;
     private static final long FLUSH_INTERVAL_MS = 5_000L;
 
-    /** Idempotent init - safe to call on every sighting; re-inits only if the world changed. */
     public static void initIfNeeded(MinecraftServer server) {
         Path expected = server.getWorldPath(LevelResource.ROOT).resolve("sablecat_sublevel_manifest.json");
         if (expected.equals(manifestPath)) return;
         init(server);
     }
 
-    /** Call once when the server/world is available. Loads any existing manifest. */
     public static void init(MinecraftServer server) {
         manifestPath = server.getWorldPath(LevelResource.ROOT).resolve("sablecat_sublevel_manifest.json");
         entries.clear();
@@ -67,13 +55,6 @@ public final class SubLevelManifest {
         }
     }
 
-    /**
-     * Records a sighting from a live, successfully-loaded sub-level. Position is
-     * the center of its global bounding box - Sable's own authoritative
-     * world-space location (plot bounds transformed through the pose), the same
-     * value its debug dumps print. Preferred over any NBT-derived arithmetic,
-     * which proved unreliable for ships whose pose was re-anchored after assembly.
-     */
     public static void recordLive(dev.ryanhcode.sable.sublevel.ServerSubLevel subLevel, String event) {
         Entry e = entries.computeIfAbsent(subLevel.getUniqueId(), k -> new Entry());
         var bounds = subLevel.boundingBox();
@@ -91,12 +72,6 @@ public final class SubLevelManifest {
         maybeFlush(false);
     }
 
-    /**
-     * Records a sighting from serialized NBT (save path). Keeps the last known
-     * live position if one exists - the NBT pose fields mix coordinate spaces
-     * depending on the ship's history, so no world position is derived here;
-     * only name/dimension/chunk-count/timestamp are refreshed.
-     */
     public static void record(UUID uuid, String dimension, CompoundTag fullTag, String event) {
         Entry e = entries.computeIfAbsent(uuid, k -> new Entry());
 

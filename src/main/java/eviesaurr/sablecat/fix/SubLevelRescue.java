@@ -7,24 +7,10 @@ import net.minecraft.server.level.ServerLevel;
 
 import java.util.UUID;
 
-/**
- * Performs the actual rescue of a captured, pose-corrupted holding sub-level:
- * rewrites the pose NBT to a sane location, resets stored velocity, and
- * re-submits the holding sub-level to Sable's normal load path.
- * <p>
- * Only POSE_CORRUPTED failures are eligible - CONTENT_EMPTY records have no
- * block data to place, and moving them would just relocate an unloadable shell.
- */
 public final class SubLevelRescue {
 
     public record RescueResult(boolean success, String message) {}
 
-    /**
-     * Rewrites the pose inside the holding sub-level's fullTag in place, then
-     * re-runs Sable's own loadHoldingSubLevel on it. fullyLoad reads pose and
-     * plot purely from the NBT (never from SubLevelData's pose/bounds fields),
-     * so an NBT rewrite is sufficient - no need to reconstruct SubLevelData.
-     */
     public static RescueResult rescue(ServerLevel level, UUID uuid, double x, double y, double z) {
         CorruptedHoldingRegistry.CapturedFailure failure = CorruptedHoldingRegistry.get(uuid);
         if (failure == null) {
@@ -38,13 +24,6 @@ public final class SubLevelRescue {
 
         HoldingSubLevel holding = failure.holding();
         CompoundTag tag = holding.data().fullTag();
-
-        // COORDINATE SPACES (empirically confirmed):
-        // - rotation_point lives in PLOT space: it is the plot anchor, ~20M blocks
-        //   out in the plot grid. Huge values here are NORMAL and must be PRESERVED.
-        // - position is WORLD space: healthy ships carry small world coords here
-        //   (Sable's dumps print them directly), and fullyLoad passes it straight
-        //   to pipeline.teleport. The rescue location goes in unconverted.
         CompoundTag oldPose = tag.getCompound("pose");
         CompoundTag rotPoint = oldPose.getCompound("rotation_point");
         double rpx = rotPoint.getDouble("x");
@@ -58,8 +37,6 @@ public final class SubLevelRescue {
         }
 
         CompoundTag poseTag = new CompoundTag();
-        // position is WORLD-space (empirically confirmed via healthy ships' dumps
-        // and the Snow Kitty tphere incident) - the rescue location goes in as-is.
         poseTag.put("position", writeVec(x, y, z));
         poseTag.put("rotation_point", writeVec(rpx, rpy, rpz)); // preserved - plot space
         CompoundTag orientation = new CompoundTag();
@@ -87,8 +64,6 @@ public final class SubLevelRescue {
             return new RescueResult(false, "Re-load threw an exception (see log): " + e.getMessage());
         }
 
-        // fullyLoad succeeded iff Sable no longer reports it as a failure on this attempt.
-        // The capture mixin re-captures on failure, refreshing capturedAtMs - detect that.
         CorruptedHoldingRegistry.CapturedFailure after = CorruptedHoldingRegistry.get(uuid);
         if (after != null && after.capturedAtMs() > failure.capturedAtMs()) {
             return new RescueResult(false,

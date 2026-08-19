@@ -38,8 +38,6 @@ public abstract class SubLevelStorageMixin {
                         CorruptedPointerCache.getFailCount(chunkKey, pointer), pointer, chunkPos);
             }
         } else {
-            // Loaded successfully - if this pointer had previously failed, forget that
-            // history entirely rather than leaving a stale fail count lying around.
             if (CorruptedPointerCache.clearOne(chunkKey, pointer)) {
                 SableCat.LOGGER.info("Sub-level pointer recovered: {} in chunk {}", pointer, chunkPos);
             }

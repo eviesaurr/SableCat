@@ -11,10 +11,16 @@ import dev.ryanhcode.sable.sublevel.storage.serialization.SubLevelData;
 import dev.ryanhcode.sable.sublevel.storage.serialization.SubLevelSerializer;
 import dev.ryanhcode.sable.sublevel.storage.serialization.SubLevelStorage;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
+import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.channels.Channels;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -24,23 +30,23 @@ import java.util.regex.Pattern;
 
 /**
  * Imports a sub-level from an EXTERNAL, offline copy of Sable's storage
- * folder (e.g. a pre-rollback backup) into the current live world, as a
- * brand new sub-level.
+ * folder into the current live world, as a brand new sub-level.
  * <p>
- * This is for recovering data that no longer exists anywhere in the live
- * world's own storage at all - distinct from rescue() (repairs a
- * still-present-but-corrupted record) and purge() (removes a dead record).
- * Here there IS no live record; the source of truth is an external folder
- * an admin has placed on the server's filesystem (e.g. a copy of an old
- * backup's ".sable" storage directory, or a specific "sublevels" folder
- * extracted from one).
- * <p>
- * Since the external storage has no live pointer/chunk-position index to
- * look up by UUID directly, this scans every region file present in the
- * folder, checking each of its up-to-1024 possible chunk slots for a
- * holding chunk, and each pointer within any found holding chunk, until a
- * SubLevelData with a matching UUID is found. This is a one-off manual
- * recovery operation, not a hot path, so an exhaustive scan is acceptable.
+ * Two discovery paths:
+ * - findInExternalStorage: normal path, walks the region file's own header
+ *   table via Sable's real SubLevelStorage API. Works for any sub-level
+ *   whose pointer is still properly indexed.
+ * - importFromExactOffset: bypasses the header entirely and reads a
+ *   CompoundTag directly from a known raw byte offset within a storage
+ *   file. For sub-levels whose data is still physically present and
+ *   well-formed, but no longer referenced by any valid header entry
+ *   (e.g. orphaned after being moved/reassigned) - confirmed as the real
+ *   situation for one specific recovery case via a byte-offset scan that
+ *   found complete, correctly sector-aligned, valid NBT data that Sable's
+ *   own header-driven scan could not discover. Uses the exact same
+ *   NbtIo.readCompressed(InputStream, NbtAccounter) call Sable's own
+ *   SubLevelStorageFile.read(int) uses internally, confirmed directly from
+ *   decompiled bytecode of the actual jar in use, not guessed.
  */
 public final class SubLevelImport {
 
@@ -48,11 +54,6 @@ public final class SubLevelImport {
 
     private static final Pattern REGION_FILE_PATTERN = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.slvlr$");
 
-    /**
-     * Searches every region file in externalFolder for a sub-level matching
-     * uuid. Returns the found data (with its ORIGINAL pose, untouched) or
-     * null if not found anywhere in the folder.
-     */
     public static SubLevelData findInExternalStorage(Path externalFolder, UUID uuid) throws IOException {
         if (!Files.isDirectory(externalFolder)) {
             throw new IOException("Not a directory: " + externalFolder);
@@ -92,14 +93,6 @@ public final class SubLevelImport {
         return null;
     }
 
-    /**
-     * Imports a sub-level found via findInExternalStorage into the live
-     * world: rewrites its pose to the given location (preserving
-     * rotation_point, same world-space-position convention as
-     * SubLevelRescue), loads it through the real SubLevelSerializer.fullyLoad
-     * pipeline, and immediately persists it to the live world's own storage
-     * rather than waiting for a future save cycle.
-     */
     public static ImportResult importSubLevel(ServerLevel level, Path externalFolder, UUID uuid, double x, double y, double z) {
         SubLevelData data;
         try {
@@ -112,21 +105,52 @@ public final class SubLevelImport {
         if (data == null) {
             return new ImportResult(false,
                     "No sub-level with UUID " + uuid + " found anywhere in " + externalFolder
-                            + " (scanned every region file present).");
+                            + " (scanned every region file present). If you know its exact raw byte offset within a "
+                            + "specific storage file, try importFromExactOffset instead - the header index may not "
+                            + "reference it even though the data itself is still present.");
         }
 
+        return finishImport(level, data, uuid, x, y, z);
+    }
+
+    public static ImportResult importFromExactOffset(ServerLevel level, Path storageFile, long byteOffset, double x, double y, double z) {
+        CompoundTag tag;
+        try (RandomAccessFile raf = new RandomAccessFile(storageFile.toFile(), "r")) {
+            raf.seek(byteOffset);
+            try (DataInputStream in = new DataInputStream(new BufferedInputStream(Channels.newInputStream(raf.getChannel())))) {
+                tag = NbtIo.readCompressed(in, NbtAccounter.unlimitedHeap());
+            }
+        } catch (IOException e) {
+            SableCat.LOGGER.error("Direct-offset read failed at {} offset {}", storageFile, byteOffset, e);
+            return new ImportResult(false, "Failed to read NBT at offset " + byteOffset + " in " + storageFile + ": " + e);
+        }
+
+        SubLevelData data;
+        try {
+            data = SubLevelSerializer.fromData(tag);
+        } catch (Exception e) {
+            SableCat.LOGGER.error("Failed to construct SubLevelData from tag read at offset {}", byteOffset, e);
+            return new ImportResult(false, "Read valid NBT at that offset, but it doesn't parse as a sub-level: " + e);
+        }
+
+        if (data == null) {
+            return new ImportResult(false, "SubLevelSerializer.fromData returned null for the tag at offset " + byteOffset);
+        }
+
+        return finishImport(level, data, data.uuid(), x, y, z);
+    }
+
+    private static ImportResult finishImport(ServerLevel level, SubLevelData data, UUID uuid, double x, double y, double z) {
         CompoundTag tag = data.fullTag();
         String name = tag.contains("display_name") ? tag.getString("display_name") : "(unnamed)";
         int chunkCount = tag.getCompound("plot").getCompound("chunks").getAllKeys().size();
 
         if (chunkCount == 0) {
             return new ImportResult(false,
-                    "Found " + uuid + " (" + name + ") in external storage, but it has NO plot block content either "
+                    "Found " + uuid + " (" + name + "), but it has NO plot block content either "
                             + "- there's nothing to recover. Not importing an empty record.");
         }
 
-        // Rewrite position, preserve rotation_point (plot-space anchor) exactly - same
-        // convention established and tested in SubLevelRescue.
         CompoundTag oldPose = tag.getCompound("pose");
         CompoundTag rotPoint = oldPose.getCompound("rotation_point");
         CompoundTag newPose = new CompoundTag();
@@ -153,8 +177,6 @@ public final class SubLevelImport {
                             + "may itself have an issue (check server log for the specific error).");
         }
 
-        // Persist immediately rather than waiting for a future saveAll() to find it -
-        // same lesson learned from the purge persistence issue.
         try {
             var container = SubLevelContainer.getContainer(level);
             if (container != null) {

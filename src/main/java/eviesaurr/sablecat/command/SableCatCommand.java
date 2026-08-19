@@ -142,6 +142,15 @@ public class SableCatCommand {
                                 )
                         )
                 )
+                .then(Commands.literal("importoffset")
+                        .then(Commands.argument("uuid", StringArgumentType.word())
+                                .then(Commands.argument("offset", com.mojang.brigadier.arguments.LongArgumentType.longArg(0))
+                                        .then(Commands.argument("storagefile", StringArgumentType.greedyString())
+                                                .executes(SableCatCommand::importFromOffsetConfirm)
+                                        )
+                                )
+                        )
+                )
                 .then(Commands.literal("manifest")
                         .then(Commands.literal("list")
                                 .executes(SableCatCommand::manifestList)
@@ -312,10 +321,6 @@ public class SableCatCommand {
         return changed;
     }
 
-    /**
-     * Lists every sub-level pointer currently blacklisted by corrupted-cleanup,
-     * grouped by chunk, along with how many consecutive times each has failed to load.
-     */
     private static int listCorrupted(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         Map<Long, Set<SavedSubLevelPointer>> all = CorruptedPointerCache.getAll();
@@ -348,11 +353,6 @@ public class SableCatCommand {
         return total;
     }
 
-    /**
-     * Force-clears the entire corrupted-pointer cache, so every blacklisted
-     * sub-level gets a genuine retry on its next load attempt instead of
-     * waiting out the cooldown.
-     */
     private static int clearAllCorrupted(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         int totalBefore = 0;
@@ -411,7 +411,6 @@ public class SableCatCommand {
                 }
             }
 
-            // 扫描 sub-level 的 plot 区块
             if (level instanceof dev.ryanhcode.sable.mixinterface.plot.SubLevelContainerHolder holder2) {
                 var container = holder2.sable$getPlotContainer();
                 if (container != null) {
@@ -499,14 +498,13 @@ public class SableCatCommand {
                             int worldY = baseY + y;
                             int worldZ = (cz << 4) + z;
 
-                            // 仅处理 plot 范围内的方块
                             if (worldX < plotBounds.minX() || worldX > plotBounds.maxX() ||
                                     worldY < plotBounds.minY() || worldY > plotBounds.maxY() ||
                                     worldZ < plotBounds.minZ() || worldZ > plotBounds.maxZ()) continue;
 
                             BlockPos localPos = new BlockPos(worldX, worldY, worldZ);
 
-                            // 将局部坐标转换为全局坐标
+
                             net.minecraft.world.phys.Vec3 globalPos = dev.ryanhcode.sable.companion.math.JOMLConversion.toMojang(
                                     subLevel.logicalPose().transformPosition(
                                             dev.ryanhcode.sable.companion.math.JOMLConversion.toJOML(
@@ -547,8 +545,6 @@ public class SableCatCommand {
         context.getSource().sendSuccess(() -> Component.literal(LanguageManager.get("command.monitor-stopped", count)), false);
         return count;
     }
-
-    // --- /sablecat rescue ---
 
     private static double[] sablecat$getRescueLocation() {
         FixEntry entry = FixRegistry.getFix("rescue-capture");
@@ -663,8 +659,6 @@ public class SableCatCommand {
         }
     }
 
-    // --- /sablecat manifest ---
-
     private static int manifestList(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         Map<UUID, SubLevelManifest.Entry> all = SubLevelManifest.getAll();
@@ -723,19 +717,6 @@ public class SableCatCommand {
         return flagged;
     }
 
-    // --- /sablecat tphere ---
-
-    /**
-     * Teleports a sub-level to the command source's position. pose.position()
-     * is world-space (rotation_point is the plot anchor in plot space; the
-     * pose transform maps plot coords to world around it). What this adds over
-     * /sable teleport is the full verified sequence from
-     * SubLevelSerializer.fullyLoad: resetVelocity -> set pose ->
-     * pipeline.teleport -> updateLastPose -> updateBoundingBox, where
-     * updateLastPose snaps client render interpolation so the ship appears
-     * instantly instead of visibly flying, and updateBoundingBox forces a
-     * fresh world-bounds recompute (doubles as a bounds repair nudge).
-     */
     private static int tpHere(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         String raw = StringArgumentType.getString(context, "target").trim();
@@ -746,7 +727,6 @@ public class SableCatCommand {
             return 0;
         }
 
-        // Resolve by exact name (case-insensitive) first, then by UUID / UUID prefix.
         dev.ryanhcode.sable.sublevel.ServerSubLevel target = null;
         for (var sl : container.getAllSubLevels()) {
             String name = sl.getName();
@@ -781,9 +761,6 @@ public class SableCatCommand {
             return 0;
         }
 
-        // pose.position() is WORLD-space (confirmed empirically: healthy ships report
-        // small world coords in Sable's own dumps, and fullyLoad passes pose.position()
-        // straight to pipeline.teleport). No space conversion - destination goes in as-is.
         var physics = container.physicsSystem();
         var pipeline = physics.getPipeline();
 
@@ -793,7 +770,6 @@ public class SableCatCommand {
         target.updateLastPose();
         target.updateBoundingBox();
 
-        // Record the sighting so the manifest reflects the move immediately.
         SubLevelManifest.recordLive(target, "tphere");
 
         String name = target.getName();
@@ -802,8 +778,6 @@ public class SableCatCommand {
         source.sendSuccess(() -> Component.literal(msg), true);
         return 1;
     }
-
-    // --- /sablecat save-failures ---
 
     private static int saveFailuresList(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -833,8 +807,6 @@ public class SableCatCommand {
         source.sendSuccess(() -> Component.literal("Cleared " + count + " save failure record(s)."), true);
         return count;
     }
-
-    // --- /sablecat rescue <uuid> purge ---
 
     private static int purgeDryRun(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -893,8 +865,6 @@ public class SableCatCommand {
             return 0;
         }
     }
-
-    // --- /sablecat purge <uuid> (general - any currently-loaded, confirmed-empty sub-level) ---
 
     private static int purgeLiveDryRun(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -965,8 +935,6 @@ public class SableCatCommand {
             return 0;
         }
     }
-
-    // --- /sablecat forcepurge <uuid> (unrestricted - deletes ANY loaded sub-level, real content or not) ---
 
     private static int forcePurgeDryRun(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -1043,8 +1011,6 @@ public class SableCatCommand {
         }
     }
 
-    // --- /sablecat backup (periodic archival to an independent library) ---
-
     private static int backupNow(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         try {
@@ -1058,9 +1024,6 @@ public class SableCatCommand {
 
             source.sendSuccess(() -> Component.literal("Backing up sub-levels to " + libraryPath + " (this may take a moment)..."), false);
 
-            // Run off the main thread - this walks and zips the whole sub-level
-            // storage folder, which shouldn't block the server for a manual,
-            // deliberately-triggered admin action.
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 String result = SubLevelBackup.runBackupNow(level, libraryPath, entry);
                 level.getServer().execute(() ->
@@ -1128,16 +1091,6 @@ public class SableCatCommand {
         }
     }
 
-    // --- /sablecat import (recover a sub-level from an external offline storage folder) ---
-
-    /**
-     * Strips accidental surrounding quote characters. Minecraft's greedyString
-     * argument type (used for the folder path here) captures everything typed
-     * literally, INCLUDING quote marks - unlike a shell, it does not strip
-     * them. A path typed with quotes (a very natural habit) would otherwise
-     * contain literal " characters, which are invalid in Windows paths and
-     * make Path.of() throw with zero visible error.
-     */
     private static String sablecat$stripQuotes(String s) {
         s = s.trim();
         if (s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"")) {
@@ -1146,18 +1099,6 @@ public class SableCatCommand {
         return s;
     }
 
-    /**
-     * Parses a folder path argument, reporting a clear, specific error
-     * instead of letting Path.of() throw uncaught. This matters more than it
-     * looks like it should: in this project's setup, an uncaught exception
-     * from inside a command handler produces ONLY the generic client-side
-     * "An unexpected error occurred trying to execute that command" message
-     * - confirmed by grepping BOTH latest.log and debug.log for a real
-     * incident and finding no stack trace in either, at any log level. There
-     * is no server-side fallback logging it. Every risky operation in these
-     * import commands needs its own explicit handling, or a failure is
-     * completely undiagnosable.
-     */
     private static java.nio.file.Path sablecat$parseFolder(CommandSourceStack source, String rawArg) {
         String cleaned = sablecat$stripQuotes(rawArg);
         try {
@@ -1278,6 +1219,39 @@ public class SableCatCommand {
         } catch (Exception e) {
             SableCat.LOGGER.error("import confirm failed for uuid {} arg '{}'", uuid, folderArg, e);
             source.sendFailure(Component.literal("Unexpected error during import: " + e));
+            return 0;
+        }
+    }
+
+    private static int importFromOffsetConfirm(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        UUID uuid = sablecat$parseUuid(context, source);
+        if (uuid == null) return 0;
+
+        try {
+            if (!(source.getLevel() instanceof net.minecraft.server.level.ServerLevel level)) {
+                source.sendFailure(Component.literal("Must be run in a server level context"));
+                return 0;
+            }
+
+            String storageFileArg = StringArgumentType.getString(context, "storagefile");
+            long offset = com.mojang.brigadier.arguments.LongArgumentType.getLong(context, "offset");
+            java.nio.file.Path storageFile = java.nio.file.Path.of(sablecat$stripQuotes(storageFileArg));
+
+            double[] loc = sablecat$getRescueLocation();
+            SubLevelImport.ImportResult result =
+                    SubLevelImport.importFromExactOffset(level, storageFile, offset, loc[0], loc[1], loc[2]);
+
+            if (result.success()) {
+                source.sendSuccess(() -> Component.literal(result.message()), true);
+                return 1;
+            } else {
+                source.sendFailure(Component.literal(result.message()));
+                return 0;
+            }
+        } catch (Exception e) {
+            SableCat.LOGGER.error("importoffset failed for uuid {}", uuid, e);
+            source.sendFailure(Component.literal("Unexpected error: " + e));
             return 0;
         }
     }

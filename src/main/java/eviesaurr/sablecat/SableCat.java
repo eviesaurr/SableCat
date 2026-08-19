@@ -166,6 +166,34 @@ public class SableCat {
                 "Suppresses self-constraint errors in Sable physics pipeline: when a constraint is added between a SubLevel and itself, returns null instead of throwing IllegalArgumentException, preventing log spam",
                 true, Set.of("sable"), FixEntry.Side.BOTH);
 
+        FixRegistry.register("shock-coil-coordinate-fix",
+                "Fixes shock coils comparing their own position in the wrong coordinate space against targets inside Sable sub-levels, which could hang or crash the server",
+                true, FixEntry.Side.BOTH);
+
+        FixRegistry.register("turret-visual-sync-fix",
+                "Fixes turret barrels never visually rotating inside Sable sub-levels, because the sync packet's recipient lookup used the raw plot-storage position instead of the turret's real world position",
+                true, FixEntry.Side.BOTH);
+
+        FixRegistry.register("turret-muzzle-position-fix",
+                "Fixes turret projectiles firing toward the wrong plot-space coordinate before being corrected mid-flight, because the muzzle position calculation used an unreliable reflection-based coordinate transform",
+                true, FixEntry.Side.BOTH);
+
+        FixRegistry.register("turret-targeting-fix",
+                "Fixes the turret targeting on sublevels.",
+                true, FixEntry.Side.BOTH);
+
+        FixRegistry.register("enemy-turret-targeting-fix",
+                "Fixes enemy turret targeting comparing world-space target positions against a raw local turret position inside Sable sub-levels",
+                true, FixEntry.Side.BOTH);
+
+        FixRegistry.register("enemy-turret-muzzle-fix",
+                "Fixes enemy turret muzzle position never being converted to world space inside Sable sub-levels, causing projectiles to fire from the wrong location",
+                true, FixEntry.Side.BOTH);
+
+        FixRegistry.register("partial-header-write",
+                "Writes only the changed index entry to a sub-level storage file's header instead of rewriting the whole 4096-byte sector on every save",
+                false, FixEntry.Side.BOTH);
+
         FixRegistry.checkEnvironment(modId -> {
             boolean loaded = net.neoforged.fml.loading.FMLLoader.getLoadingModList().getModFileById(modId) != null;
             if (!loaded) {

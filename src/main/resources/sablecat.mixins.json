@@ -13,6 +13,8 @@
     "RapierConstraintSelfFixMixinV1",
     "RapierConstraintSelfFixMixinV2",
     "SubLevelStorageFileMixin",
+    "SubLevelStorageFilePartialHeaderMixin",
+    "ShockCoilBlockEntityMixin",
     "EntityTeleportMixin",
     "LinkedTypewriterBlockMixin",
     "CommandBlockPlaceMixin",
@@ -46,10 +48,15 @@
     "PersistentEntitySectionManagerStopTrackingGuardMixin",
     "RigidBodyHandleMixin",
     "ScalableLuxCompatMixin",
-    "LevelDestroyBlockGuardMixin"
+    "LevelDestroyBlockGuardMixin",
+    "TurretBlockEntityMixin",
+    "EnemyTurretBlockEntityMixin"
   ],
   "client": [
-    "EffortlessParticleFixMixin"
+    "EffortlessParticleFixMixin",
+    "S2CMessageTurretVisualSyncAccessor",
+    "S2CMessageTurretVisualSyncMixin"
+
   ],
   "injectors": {
     "defaultRequire": 1

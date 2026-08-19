@@ -58,12 +58,6 @@ public abstract class SubLevelHoldingChunkMapMixin {
         this.sablecat$pendingSaves = new ArrayList<>();
     }
 
-    /**
-     * Records a save failure and warns any online ops immediately, rather than
-     * relying on someone to notice a single ERROR log line. Runs the actual
-     * broadcast on the main thread via level.getServer().execute(...), since
-     * this may be called from the async IO thread.
-     */
     @Unique
     private void sablecat$reportSaveFailure(String key, String description, Throwable error) {
         SableCat.LOGGER.error("Save failed - {}: {}", description, error.toString(), error);
@@ -71,14 +65,6 @@ public abstract class SubLevelHoldingChunkMapMixin {
 
         if (this.level == null) return;
         this.level.getServer().execute(() -> {
-            // Action bar, not chat - reads as a system notice rather than a
-            // conversational message, doesn't pollute chat history/scrollback,
-            // and auto-fades. Sable's own toast system (SableToastableServer)
-            // is the "correct" vanilla answer here, but it's only implemented
-            // for IntegratedServer (singleplayer) - there's no dedicated-server
-            // wiring for it, so it silently does nothing on a real server.
-            // Replicating it properly would need a custom network packet;
-            // action bar gets most of the same low-intrusion feel for one line.
             Component msg = Component.literal(
                     "[sablecat] Save failed: " + description + " - check /sablecat save-failures list");
             for (ServerPlayer player : this.level.getServer().getPlayerList().getPlayers()) {
@@ -94,22 +80,12 @@ public abstract class SubLevelHoldingChunkMapMixin {
         SaveFailureRegistry.recordSuccess(key);
     }
 
-    // Note: PalettedContainer is not thread-safe (has ThreadingDetector), ServerLevelPlot.save cannot run on async thread
-    // So serialization (including PalettedContainer.pack) runs on main thread, only disk IO goes async
-
     @Redirect(
             method = "saveAll",
             at = @At(value = "INVOKE", target = "Ldev/ryanhcode/sable/sublevel/storage/serialization/SubLevelStorage;attemptSaveSubLevel(Ldev/ryanhcode/sable/sublevel/storage/holding/GlobalSavedSubLevelPointer;Ldev/ryanhcode/sable/sublevel/storage/serialization/SubLevelData;)V", remap = false),
             remap = false
     )
     private void sablecat$wrapSaveSubLevel(SubLevelStorage storage, GlobalSavedSubLevelPointer pointer, SubLevelData data) {
-        // data == null is a LEGITIMATE, intentional value here, not an error case -
-        // it's Sable's own documented mechanism for deleting a sub-level's storage
-        // slot (used by Sable's own queuedDeletion processing, and by our own
-        // SubLevelPurge.purgeLive()). This crashed the entire server (confirmed via
-        // a real crash report) because data.uuid() was called unconditionally below
-        // without checking for this case first - any genuine deletion, ours or
-        // Sable's own, would crash the very next save cycle after being queued.
         if (data == null) {
             String key = "delete:" + pointer;
             String desc = "deletion of sub-level at pointer " + pointer;
@@ -151,11 +127,7 @@ public abstract class SubLevelHoldingChunkMapMixin {
             }
             return;
         }
-        // Submit disk IO to async thread to avoid blocking main thread
-        // Exceptions are caught here (so one bad save can't take down the
-        // whole batch or crash the IO thread) but ALSO reported immediately,
-        // rather than only being swallowed - this is the actual fix for the
-        // silent-loss issue, not just a log-line change.
+
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             try {
                 storage.attemptSaveSubLevel(pointer, data);

@@ -48,8 +48,8 @@ repositories {
         url = "https://api.modrinth.com/maven"
     }
     maven {
-        name = "CurseMaven"
-        url = "https://www.cursemaven.com"
+        url = "https://cursemaven.com"
+        content { includeGroup "curse.maven" }
     }
     exclusiveContent {
         forRepository {
@@ -57,6 +57,17 @@ repositories {
         }
         filter {
             includeGroup("dev.ryanhcode.sable-companion")
+        }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
         }
     }
 }
@@ -69,6 +80,10 @@ dependencies {
     compileOnly files("libs/simulated-neoforge-1.21.1-1.3.0.jar")
     compileOnly files("libs/create-aeronautics-bundled-1.21.1-1.3.0.jar")
     compileOnly files("libs/scalablelux.jar")
+    compileOnly "maven.modrinth:GwtIopV4:8pMPZhvI"
+    compileOnly "maven.modrinth:twkfQtEc:9pTyXZOj" // Moonlight Lib 1.21-2.27.1-neoforge
+    compileOnly "curse.maven:framework-549225:7530361"
+
 }
 
 tasks.named('processResources', ProcessResources).configure {
