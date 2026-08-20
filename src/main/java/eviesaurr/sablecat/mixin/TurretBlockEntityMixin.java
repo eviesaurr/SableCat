@@ -47,6 +47,27 @@ public abstract class TurretBlockEntityMixin extends BlockEntity {
     @Shadow protected float previousYaw;
     @Shadow protected float previousPitch;
     @Shadow protected boolean hasSmoothedTarget;
+    @Shadow protected int cooldown;
+
+    @org.spongepowered.asm.mixin.Unique
+    private long sablecat$lastTickGameTime = Long.MIN_VALUE;
+
+    @Inject(method = "tickTurret", at = @At("HEAD"), cancellable = true)
+    private void sablecat$preventMultiTick(Level level, BlockPos pos, net.minecraft.world.level.block.state.BlockState state, CallbackInfo ci) {
+        if (!FixRegistry.isEnabled("turret-multi-tick-fix")) {
+            return;
+        }
+        if (level.isClientSide()) {
+            ci.cancel();
+            return;
+        }
+        long gameTime = level.getGameTime();
+        if (this.sablecat$lastTickGameTime == gameTime) {
+            ci.cancel();
+            return;
+        }
+        this.sablecat$lastTickGameTime = gameTime;
+    }
 
     @Inject(method = "syncVisualState", at = @At("HEAD"), cancellable = true)
     private void sablecat$syncVisualStateWithCorrectedChunkLookup(Level level, CallbackInfo ci) {

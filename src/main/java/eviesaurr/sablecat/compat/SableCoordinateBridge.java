@@ -12,6 +12,7 @@ public final class SableCoordinateBridge {
     private SableCoordinateBridge() {
     }
 
+
     public static Vec3 projectToWorldSpace(Level level, Vec3 position) {
         try {
             return Sable.HELPER.projectOutOfSubLevel(level, position);
@@ -26,6 +27,14 @@ public final class SableCoordinateBridge {
             return access != null ? access.logicalPose().transformNormalInverse(worldDirection) : worldDirection;
         } catch (RuntimeException e) {
             return worldDirection;
+        }
+    }
+
+    public static boolean isInSubLevel(Level level, BlockPos pos) {
+        try {
+            return SableCompanion.INSTANCE.getContaining(level, pos) != null;
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 }

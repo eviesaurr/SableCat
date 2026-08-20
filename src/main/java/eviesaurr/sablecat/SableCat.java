@@ -178,6 +178,10 @@ public class SableCat {
                 "Fixes turret projectiles firing toward the wrong plot-space coordinate before being corrected mid-flight, because the muzzle position calculation used an unreliable reflection-based coordinate transform",
                 true, FixEntry.Side.BOTH);
 
+        FixRegistry.register("turret-multi-tick-fix",
+                "Fixes turrets ticking multiple times per real game tick inside Sable sub-levels (observed from both the server and render thread), which drains cooldown far faster than intended and can make fire rate wildly inconsistent",
+                true, FixEntry.Side.BOTH);
+
         FixRegistry.register("turret-targeting-fix",
                 "Fixes the turret targeting on sublevels.",
                 true, FixEntry.Side.BOTH);
